@@ -391,3 +391,13 @@ config KASAN_SHADOW_OFFSET
 	default 0xe0000000 if PPC32
 	default 0xa80e000000000000 if PPC_BOOK3S_64
 	default 0xa8001c0000000000 if PPC_BOOK3E_64
+
+config CPUIDLE_LATENCY_SELFTEST
+	tristate "Cpuidle latency selftests"
+	depends on CPU_IDLE
+	help
+	  Provides a kernel module that run tests using the IPI and
+	  timers to measure cpuidle latency.
+
+	  Say M if you want these self tests to build as a module.
+	  Say N if you are unsure.
