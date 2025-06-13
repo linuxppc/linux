@@ -116,13 +116,9 @@ static void smb2_query_server_interfaces(struct work_struct *work)
 	rc = server->ops->query_server_interfaces(xid, tcon, false);
 	free_xid(xid);
 
-	if (rc) {
-		if (rc == -EOPNOTSUPP)
-			return;
-
+	if (rc)
 		cifs_dbg(FYI, "%s: failed to query server interfaces: %d\n",
 				__func__, rc);
-	}
 
 	queue_delayed_work(cifsiod_wq, &tcon->query_interfaces,
 			   (SMB_INTERFACE_POLL_INTERVAL * HZ));
@@ -377,6 +373,13 @@ static int __cifs_reconnect(struct TCP_Server_Info *server,
 	if (!cifs_tcp_ses_needs_reconnect(server, 1))
 		return 0;
 
+	/*
+	 * if smb session has been marked for reconnect, also reconnect all
+	 * connections. This way, the other connections do not end up bad.
+	 */
+	if (mark_smb_session)
+		cifs_signal_cifsd_for_reconnect(server, mark_smb_session);
+
 	cifs_mark_tcp_ses_conns_for_reconnect(server, mark_smb_session);
 
 	cifs_abort_connection(server);
@@ -385,7 +388,8 @@ static int __cifs_reconnect(struct TCP_Server_Info *server,
 		try_to_freeze();
 		cifs_server_lock(server);
 
-		if (!cifs_swn_set_server_dstaddr(server)) {
+		if (!cifs_swn_set_server_dstaddr(server) &&
+		    !SERVER_IS_CHAN(server)) {
 			/* resolve the hostname again to make sure that IP address is up-to-date */
 			rc = reconn_set_ipaddr_from_hostname(server);
 			cifs_dbg(FYI, "%s: reconn_set_ipaddr_from_hostname: rc=%d\n", __func__, rc);
@@ -3753,28 +3757,7 @@ int cifs_mount_get_tcon(struct cifs_mount_ctx *mnt_ctx)
 		}
 	}
 
-	/*
-	 * Clamp the rsize/wsize mount arguments if they are too big for the server
-	 * and set the rsize/wsize to the negotiated values if not passed in by
-	 * the user on mount
-	 */
-	if ((cifs_sb->ctx->wsize == 0) ||
-	    (cifs_sb->ctx->wsize > server->ops->negotiate_wsize(tcon, ctx))) {
-		cifs_sb->ctx->wsize =
-			round_down(server->ops->negotiate_wsize(tcon, ctx), PAGE_SIZE);
-		/*
-		 * in the very unlikely event that the server sent a max write size under PAGE_SIZE,
-		 * (which would get rounded down to 0) then reset wsize to absolute minimum eg 4096
-		 */
-		if (cifs_sb->ctx->wsize == 0) {
-			cifs_sb->ctx->wsize = PAGE_SIZE;
-			cifs_dbg(VFS, "wsize too small, reset to minimum ie PAGE_SIZE, usually 4096\n");
-		}
-	}
-	if ((cifs_sb->ctx->rsize == 0) ||
-	    (cifs_sb->ctx->rsize > server->ops->negotiate_rsize(tcon, ctx)))
-		cifs_sb->ctx->rsize = server->ops->negotiate_rsize(tcon, ctx);
-
+	cifs_negotiate_iosize(server, cifs_sb->ctx, tcon);
 	/*
 	 * The cookie is initialized from volume info returned above.
 	 * Inside cifs_fscache_get_super_cookie it checks
