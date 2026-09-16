@@ -20,6 +20,7 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/memblock.h>
+#include <linux/minmax.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <asm/setup.h>
@@ -105,31 +106,19 @@ static __be64 *check_realloc_usable_mem(struct umem_info *um_info, int cnt)
 static int add_usable_mem(struct umem_info *um_info, u64 base, u64 end)
 {
 	u64 loc_base, loc_end;
-	bool add;
 	int i;
 
 	for (i = 0; i < um_info->nr_ranges; i++) {
-		add = false;
-		loc_base = um_info->ranges[i].start;
-		loc_end = um_info->ranges[i].end;
-		if (loc_base >= base && loc_end <= end)
-			add = true;
-		else if (base <= loc_end && end >= loc_base) {
-			if (loc_base < base)
-				loc_base = base;
-			if (loc_end > end)
-				loc_end = end;
-			add = true;
-		}
+		loc_base = max(base, um_info->ranges[i].start);
+		loc_end = min(end, um_info->ranges[i].end);
+		if (loc_base > loc_end)
+			continue;
 
-		if (add) {
-			if (!check_realloc_usable_mem(um_info, 2))
-				return -ENOMEM;
+		if (!check_realloc_usable_mem(um_info, 2))
+			return -ENOMEM;
 
-			um_info->buf[um_info->idx++] = cpu_to_be64(loc_base);
-			um_info->buf[um_info->idx++] =
-					cpu_to_be64(loc_end - loc_base + 1);
-		}
+		um_info->buf[um_info->idx++] = cpu_to_be64(loc_base);
+		um_info->buf[um_info->idx++] = cpu_to_be64(loc_end - loc_base + 1);
 	}
 
 	return 0;
