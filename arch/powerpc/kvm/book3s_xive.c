@@ -1820,7 +1820,8 @@ void kvmppc_xive_cleanup_vcpu(struct kvm_vcpu *vcpu)
 	kvmppc_xive_disable_vcpu_interrupts(vcpu);
 
 	/* Mask the VP IPI */
-	xive_vm_esb_load(&xc->vp_ipi_data, XIVE_ESB_SET_PQ_01);
+	if (xc->vp_ipi_data.eoi_mmio)
+		xive_vm_esb_load(&xc->vp_ipi_data, XIVE_ESB_SET_PQ_01);
 
 	/* Free escalations */
 	for (i = 0; i < KVMPPC_XIVE_Q_COUNT; i++) {
