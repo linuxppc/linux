@@ -142,9 +142,6 @@ void arch_setup_new_exec(void);
 #define _TIF_SYSCALL_TRACEPOINT	(1<<TIF_SYSCALL_TRACEPOINT)
 #define _TIF_EMULATE_STACK_STORE	(1<<TIF_EMULATE_STACK_STORE)
 #define _TIF_SYSCALL_EMU	(1<<TIF_SYSCALL_EMU)
-#define _TIF_SYSCALL_DOTRACE	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | \
-				 _TIF_SECCOMP | _TIF_SYSCALL_TRACEPOINT | \
-				 _TIF_SYSCALL_EMU)
 
 #define _TIF_USER_WORK_MASK	(_TIF_SIGPENDING | _TIF_NEED_RESCHED | \
 				 _TIF_NEED_RESCHED_LAZY | _TIF_NOTIFY_RESUME | \
@@ -152,6 +149,18 @@ void arch_setup_new_exec(void);
 				 _TIF_PATCH_PENDING | _TIF_NOTIFY_SIGNAL)
 
 #define _TIF_PERSYSCALL_MASK	(_TIF_RESTOREALL|_TIF_NOERROR)
+
+/*
+ * Syscall work after which the exit must reload all registers from
+ * pt_regs: a tracer may have changed any of them at a syscall or seccomp
+ * stop, or under PTRACE_SYSEMU. Audit and the tracepoint are included to
+ * keep the pre-GENERIC_ENTRY behaviour.
+ */
+#define SYSCALL_WORK_RESTOREALL (SYSCALL_WORK_SECCOMP |			\
+				 SYSCALL_WORK_SYSCALL_TRACEPOINT |	\
+				 SYSCALL_WORK_SYSCALL_TRACE |		\
+				 SYSCALL_WORK_SYSCALL_EMU |		\
+				 SYSCALL_WORK_SYSCALL_AUDIT)
 
 /* Bits in local_flags */
 /* Don't move TLF_NAPPING without adjusting the code in entry_32.S */
