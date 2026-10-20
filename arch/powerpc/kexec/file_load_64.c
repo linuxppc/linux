@@ -34,14 +34,14 @@
 #include <asm/cputhreads.h>
 
 struct umem_info {
-	__be64 *buf;		/* data buffer for usable-memory property */
+	__be64 *buf __counted_by_ptr(max_entries); /* data buffer for usable-memory property */
 	u32 size;		/* size allocated for the data buffer */
 	u32 max_entries;	/* maximum no. of entries */
 	u32 idx;		/* index of current entry */
 
 	/* usable memory ranges to look up */
 	unsigned int nr_ranges;
-	const struct range *ranges;
+	const struct range *ranges __counted_by_ptr(nr_ranges);
 };
 
 const struct kexec_file_ops * const kexec_file_loaders[] = {
@@ -83,11 +83,12 @@ static __be64 *check_realloc_usable_mem(struct umem_info *um_info, int cnt)
 
 	new_size = um_info->size + MEM_RANGE_CHUNK_SZ;
 	tbuf = krealloc(um_info->buf, new_size, GFP_KERNEL);
-	if (tbuf) {
-		um_info->buf = tbuf;
-		um_info->size = new_size;
-		um_info->max_entries = (um_info->size / sizeof(u64));
-	}
+	if (!tbuf)
+		return NULL;
+
+	um_info->buf = tbuf;
+	um_info->size = new_size;
+	um_info->max_entries = um_info->size / sizeof(*um_info->buf);
 
 	return tbuf;
 }
@@ -288,12 +289,12 @@ static int update_usable_mem_fdt(void *fdt, struct crash_mem *usable_mem)
 		return -EINVAL;
 	}
 
-	um_info.buf  = NULL;
+	um_info.buf = NULL;
 	um_info.size = 0;
 	um_info.max_entries = 0;
-	um_info.idx  = 0;
+	um_info.idx = 0;
 	/* Memory ranges to look up */
-	um_info.ranges = &(usable_mem->ranges[0]);
+	um_info.ranges = usable_mem->ranges;
 	um_info.nr_ranges = usable_mem->nr_ranges;
 
 	dn = of_find_node_by_path("/ibm,dynamic-reconfiguration-memory");
