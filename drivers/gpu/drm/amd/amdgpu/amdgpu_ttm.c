@@ -2065,14 +2065,15 @@ static int amdgpu_ttm_buffer_entity_init(struct amdgpu_gtt_mgr *mgr,
 	int i, r, num_pages;
 	const u64 GTT_MAX_PAGES = (AMDGPU_GTT_MAX_TRANSFER_SIZE >> PAGE_SHIFT);
 
+	if (ARRAY_SIZE(entity->gart_window_offs) < num_gart_windows)
+		return -EINVAL;
+
 	r = drm_sched_entity_init(&entity->base, prio, scheds, num_schedulers, NULL);
 	if (r)
 		return r;
 
 	mutex_init(&entity->lock);
 
-	if (ARRAY_SIZE(entity->gart_window_offs) < num_gart_windows)
-		return -EINVAL;
 	if (num_gart_windows == 0)
 		return 0;
 
@@ -2080,6 +2081,7 @@ static int amdgpu_ttm_buffer_entity_init(struct amdgpu_gtt_mgr *mgr,
 	r = amdgpu_gtt_mgr_alloc_entries(mgr, &entity->gart_node, num_pages,
 					 DRM_MM_INSERT_BEST);
 	if (r) {
+		mutex_destroy(&entity->lock);
 		drm_sched_entity_destroy(&entity->base);
 		return r;
 	}
@@ -2097,6 +2099,7 @@ static void amdgpu_ttm_buffer_entity_fini(struct amdgpu_gtt_mgr *mgr,
 					  struct amdgpu_ttm_buffer_entity *entity)
 {
 	amdgpu_gtt_mgr_free_entries(mgr, &entity->gart_node);
+	mutex_destroy(&entity->lock);
 	drm_sched_entity_destroy(&entity->base);
 }
 
@@ -2342,7 +2345,7 @@ void amdgpu_ttm_fini(struct amdgpu_device *adev)
 void amdgpu_ttm_enable_buffer_funcs(struct amdgpu_device *adev)
 {
 	struct ttm_resource_manager *man = ttm_manager_type(&adev->mman.bdev, TTM_PL_VRAM);
-	u32 num_clear_entities, num_move_entities;
+	u32 num_clear_entities, num_move_entities, sdma_ip_version;
 	int r, i, j;
 
 	if (!adev->mman.initialized || amdgpu_in_reset(adev) ||
@@ -2367,6 +2370,12 @@ void amdgpu_ttm_enable_buffer_funcs(struct amdgpu_device *adev)
 
 	num_clear_entities = MIN(adev->mman.num_buffer_funcs_scheds, TTM_NUM_MOVE_FENCES);
 	num_move_entities = MIN(adev->mman.num_buffer_funcs_scheds, TTM_NUM_MOVE_FENCES);
+	/* TODO: workaround for DCC corruption when moving BOs from multiple queues at
+	 * the same time: use a single queue until the root cause is identified and fixed.
+	 */
+	sdma_ip_version = amdgpu_ip_version(adev, SDMA0_HWIP, 0);
+	if (sdma_ip_version == IP_VERSION(7, 0, 0) || sdma_ip_version == IP_VERSION(7, 0, 1))
+		num_move_entities = 1;
 
 	adev->mman.clear_entities = kzalloc_objs(struct amdgpu_ttm_buffer_entity,
 						 num_clear_entities);
