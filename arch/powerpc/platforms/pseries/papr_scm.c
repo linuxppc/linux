@@ -1361,7 +1361,7 @@ static struct notifier_block mce_ue_nb = {
 static int papr_scm_probe(struct platform_device *pdev)
 {
 	struct device_node *dn = pdev->dev.of_node;
-	u32 drc_index, metadata_size;
+	u32 drc_index, metadata_size = 0;
 	u64 blocks, block_size;
 	struct papr_scm_priv *p;
 	u8 uuid_raw[UUID_SIZE];
