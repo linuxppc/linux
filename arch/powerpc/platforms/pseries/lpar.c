@@ -1224,6 +1224,17 @@ static void hugepage_bulk_invalidate(unsigned long *slot, unsigned long *vpn,
 		BUG_ON(rc != H_SUCCESS);
 	}
 }
+static void __pSeries_lpar_hugepage_invalidate_unlocked(unsigned long *slot,
+						      unsigned long *vpn,
+						      int count, int psize,
+						      int ssize)
+{
+	/* Assuming THP size is 16M */
+	if (is_supported_hlbkrm(psize, MMU_PAGE_16M))
+		hugepage_block_invalidate(slot, vpn, count, psize, ssize);
+	else
+		hugepage_bulk_invalidate(slot, vpn, count, psize, ssize);
+}
 
 static void __pSeries_lpar_hugepage_invalidate(unsigned long *slot,
 						      unsigned long *vpn,
@@ -1231,19 +1242,15 @@ static void __pSeries_lpar_hugepage_invalidate(unsigned long *slot,
 						      int ssize)
 {
 	unsigned long flags = 0;
-	int lock_tlbie = !mmu_has_feature(MMU_FTR_LOCKLESS_TLBIE);
 
-	if (lock_tlbie)
+	if (!mmu_has_feature(MMU_FTR_LOCKLESS_TLBIE)) {
 		spin_lock_irqsave(&pSeries_lpar_tlbie_lock, flags);
-
-	/* Assuming THP size is 16M */
-	if (is_supported_hlbkrm(psize, MMU_PAGE_16M))
-		hugepage_block_invalidate(slot, vpn, count, psize, ssize);
-	else
-		hugepage_bulk_invalidate(slot, vpn, count, psize, ssize);
-
-	if (lock_tlbie)
+		__pSeries_lpar_hugepage_invalidate_unlocked(slot, vpn, count, psize, ssize);
 		spin_unlock_irqrestore(&pSeries_lpar_tlbie_lock, flags);
+		return;
+	}
+
+	__pSeries_lpar_hugepage_invalidate_unlocked(slot, vpn, count, psize, ssize);
 }
 
 static void pSeries_lpar_hugepage_invalidate(unsigned long vsid,
