@@ -637,16 +637,16 @@ static unsigned int pseries_cpuhp_cache_use_count(const struct device_node *cach
 
 	for_each_of_cpu_node(dn) {
 		tn = of_find_next_cache_node(dn);
-		of_node_put(tn);
 		if (tn == cachedn)
 			use_count++;
+		of_node_put(tn);
 	}
 
 	for_each_node_by_type(dn, "cache") {
 		tn = of_find_next_cache_node(dn);
-		of_node_put(tn);
 		if (tn == cachedn)
 			use_count++;
+		of_node_put(tn);
 	}
 
 	return use_count;

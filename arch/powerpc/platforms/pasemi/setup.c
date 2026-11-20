@@ -272,6 +272,7 @@ static __init void pas_init_IRQ(void)
 	opprop = of_get_property(root, "platform-open-pic", &opplen);
 	if (!opprop) {
 		pr_err("No platform-open-pic property.\n");
+		of_node_put(mpic_node);
 		of_node_put(root);
 		return;
 	}
