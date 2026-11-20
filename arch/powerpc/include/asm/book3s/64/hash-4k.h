@@ -89,10 +89,14 @@ static inline unsigned long __rpte_to_hidx(real_pte_t rpte, unsigned long index)
 	return pte_val(__rpte_to_pte(rpte)) >> H_PAGE_F_GIX_SHIFT;
 }
 
+/* references all variables to avoid -Wunused-but-set-variable warning */
 #define pte_iterate_hashed_subpages(rpte, psize, va, index, shift)       \
 	do {							         \
 		index = 0;					         \
 		shift = mmu_psize_defs[psize].shift;		         \
+		(void)(rpte);					         \
+		(void)(index);					         \
+		(void)(shift);					         \
 
 #define pte_iterate_hashed_end() } while(0)
 
