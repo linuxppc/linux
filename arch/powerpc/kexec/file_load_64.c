@@ -20,6 +20,7 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/memblock.h>
+#include <linux/minmax.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <asm/setup.h>
@@ -34,14 +35,14 @@
 #include <asm/cputhreads.h>
 
 struct umem_info {
-	__be64 *buf;		/* data buffer for usable-memory property */
+	__be64 *buf __counted_by_ptr(max_entries); /* data buffer for usable-memory property */
 	u32 size;		/* size allocated for the data buffer */
 	u32 max_entries;	/* maximum no. of entries */
 	u32 idx;		/* index of current entry */
 
 	/* usable memory ranges to look up */
 	unsigned int nr_ranges;
-	const struct range *ranges;
+	const struct range *ranges __counted_by_ptr(nr_ranges);
 };
 
 const struct kexec_file_ops * const kexec_file_loaders[] = {
@@ -83,11 +84,12 @@ static __be64 *check_realloc_usable_mem(struct umem_info *um_info, int cnt)
 
 	new_size = um_info->size + MEM_RANGE_CHUNK_SZ;
 	tbuf = krealloc(um_info->buf, new_size, GFP_KERNEL);
-	if (tbuf) {
-		um_info->buf = tbuf;
-		um_info->size = new_size;
-		um_info->max_entries = (um_info->size / sizeof(u64));
-	}
+	if (!tbuf)
+		return NULL;
+
+	um_info->buf = tbuf;
+	um_info->size = new_size;
+	um_info->max_entries = um_info->size / sizeof(*um_info->buf);
 
 	return tbuf;
 }
@@ -104,31 +106,19 @@ static __be64 *check_realloc_usable_mem(struct umem_info *um_info, int cnt)
 static int add_usable_mem(struct umem_info *um_info, u64 base, u64 end)
 {
 	u64 loc_base, loc_end;
-	bool add;
 	int i;
 
 	for (i = 0; i < um_info->nr_ranges; i++) {
-		add = false;
-		loc_base = um_info->ranges[i].start;
-		loc_end = um_info->ranges[i].end;
-		if (loc_base >= base && loc_end <= end)
-			add = true;
-		else if (base <= loc_end && end >= loc_base) {
-			if (loc_base < base)
-				loc_base = base;
-			if (loc_end > end)
-				loc_end = end;
-			add = true;
-		}
+		loc_base = max(base, um_info->ranges[i].start);
+		loc_end = min(end, um_info->ranges[i].end);
+		if (loc_base > loc_end)
+			continue;
 
-		if (add) {
-			if (!check_realloc_usable_mem(um_info, 2))
-				return -ENOMEM;
+		if (!check_realloc_usable_mem(um_info, 2))
+			return -ENOMEM;
 
-			um_info->buf[um_info->idx++] = cpu_to_be64(loc_base);
-			um_info->buf[um_info->idx++] =
-					cpu_to_be64(loc_end - loc_base + 1);
-		}
+		um_info->buf[um_info->idx++] = cpu_to_be64(loc_base);
+		um_info->buf[um_info->idx++] = cpu_to_be64(loc_end - loc_base + 1);
 	}
 
 	return 0;
@@ -204,7 +194,8 @@ static int add_usable_mem_property(void *fdt, struct device_node *dn,
 	if (snprintf(path, NODE_PATH_LEN, "%pOF", dn) > (NODE_PATH_LEN - 1)) {
 		pr_err("Buffer (%d) too small for memory node: %pOF\n",
 		       NODE_PATH_LEN, dn);
-		return -EOVERFLOW;
+		ret = -EOVERFLOW;
+		goto out;
 	}
 	kexec_dprintk("Memory node path: %s\n", path);
 
@@ -288,12 +279,12 @@ static int update_usable_mem_fdt(void *fdt, struct crash_mem *usable_mem)
 		return -EINVAL;
 	}
 
-	um_info.buf  = NULL;
+	um_info.buf = NULL;
 	um_info.size = 0;
 	um_info.max_entries = 0;
-	um_info.idx  = 0;
+	um_info.idx = 0;
 	/* Memory ranges to look up */
-	um_info.ranges = &(usable_mem->ranges[0]);
+	um_info.ranges = usable_mem->ranges;
 	um_info.nr_ranges = usable_mem->nr_ranges;
 
 	dn = of_find_node_by_path("/ibm,dynamic-reconfiguration-memory");

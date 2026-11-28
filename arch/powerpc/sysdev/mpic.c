@@ -1389,7 +1389,7 @@ struct mpic * __init mpic_alloc(struct device_node *node,
 		if (fsl_version >= 0x401) {
 			ret = mpic_setup_error_int(mpic, intvec_top - 13);
 			if (ret)
-				return NULL;
+				goto err_free_mpic;
 		}
 
 	}
@@ -1489,11 +1489,11 @@ struct mpic * __init mpic_alloc(struct device_node *node,
 						 &mpic_host_ops, mpic);
 
 	/*
-	 * FIXME: The code leaks the MPIC object and mappings here; this
-	 * is very unlikely to fail but it ought to be fixed anyways.
+	 * FIXME: The code leaks the MPIC mappings here; this is very unlikely
+	 * to fail but it ought to be fixed anyways.
 	 */
 	if (mpic->irqhost == NULL)
-		return NULL;
+		goto err_free_mpic;
 
 	/* Display version */
 	switch (greg_feature & MPIC_GREG_FEATURE_VERSION_MASK) {
@@ -1526,6 +1526,9 @@ struct mpic * __init mpic_alloc(struct device_node *node,
 
 	return mpic;
 
+err_free_mpic:
+	bitmap_free(mpic->protected);
+	kfree(mpic);
 err_of_node_put:
 	of_node_put(node);
 	return NULL;

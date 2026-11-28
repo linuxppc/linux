@@ -74,6 +74,8 @@ static void __init iss4xx_init_irq(void)
 #endif
 	} else
 		panic("Unrecognized top level interrupt controller");
+
+	of_node_put(np);
 }
 
 #ifdef CONFIG_SMP

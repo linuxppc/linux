@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 
+CONTEXT_ANALYSIS	:= y
+
 KASAN_SANITIZE_mmu.o := n
 
 ifdef CONFIG_KASAN
