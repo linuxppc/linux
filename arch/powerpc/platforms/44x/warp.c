@@ -183,6 +183,7 @@ static int pika_setup_leds(void)
 				printk(KERN_ERR __FILE__ ": Failed to get %s led gpio: %d\n",
 				       led->name, error);
 				of_node_put(child);
+				of_node_put(np);
 				goto err_cleanup_pins;
 			}
 

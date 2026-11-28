@@ -52,6 +52,7 @@ void __init mpc85xx_8259_init(void)
 	cascade_irq = irq_of_parse_and_map(cascade_node, 0);
 	if (!cascade_irq) {
 		pr_err("i8259: Failed to map cascade interrupt\n");
+		of_node_put(cascade_node);
 		return;
 	}
 

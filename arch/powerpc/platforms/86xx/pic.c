@@ -58,6 +58,7 @@ void __init mpc86xx_init_irq(void)
 	cascade_irq = irq_of_parse_and_map(cascade_node, 0);
 	if (!cascade_irq) {
 		printk(KERN_ERR "Failed to map cascade interrupt\n");
+		of_node_put(cascade_node);
 		return;
 	}
 
